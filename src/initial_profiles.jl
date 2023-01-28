@@ -66,3 +66,32 @@ function HG(xs::AbstractArray,ys::AbstractArray,zs::AbstractArray;m=0,n=0,γ₀=
 
     result
 end
+
+## Diaganal HG
+
+function core_diag_HG(x,y,α,γ₀,m,n)
+    ξ = (x+y)/(√2γ₀)
+    η = (x-y)/(√2γ₀)
+    α*exp(-α*(ξ^2+η^2)/2)*hermiteh(m,abs(α)*ξ)*hermiteh(n,abs(α)*η)
+end
+
+function diag_HG(xs::AbstractArray,ys::AbstractArray,z::Number=0;m=0,n=0,γ₀=1,k=1,normalize=true)
+    α = convert(complex(eltype(xs)),1/(1+im*z/(k*γ₀^2)))
+    prefactor = normalize ? N_HG(m=m,n=n,k=k,γ₀=γ₀) * cis((m+n)*angle(α)) : cis((m+n)*angle(α))
+    
+    ThreadsX.map(r->prefactor*core_diag_HG(r...,α,γ₀,m,n),Iterators.product(xs,ys))
+end
+
+function diag_HG(xs::AbstractArray,ys::AbstractArray,zs::AbstractArray;m=0,n=0,γ₀=1,k=1,normalize=true)
+    result = Array{complex(eltype(xs))}(undef, length(xs),length(ys),length(zs))
+    transverse_grid = Iterators.product(xs,ys) |> collect
+
+    Threads.@threads for i in axes(result,3)
+        α = convert(complex(eltype(xs)),1/(1+im*zs[i]/(k*γ₀^2)))
+        prefactor = normalize ? N_HG(m=m,n=n,k=k,γ₀=γ₀) * cis((m+n)*angle(α)) : cis((m+n)*angle(α))
+    
+        map!(r->prefactor*core_diag_HG(r...,α,γ₀,m,n),view(result,:,:,i),transverse_grid)
+    end
+
+    result
+end
