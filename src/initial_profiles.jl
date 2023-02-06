@@ -9,7 +9,7 @@ function LG(x::Number,y::Number,z::Number=0;p=0,l=0,γ₀=1,k=1,normalize=true)
     α = convert(complex(typeof(x)),1/(1+im*z/(k*γ₀^2)))
     
     if normalize
-        N(p=p,l=l,k=k,γ₀=γ₀) * cis((2p+abs(l))*angle(α))*core_LG(x,y,α,γ₀,p,l)
+        N_LG(p=p,l=l,k=k,γ₀=γ₀) * cis((2p+abs(l))*angle(α))*core_LG(x,y,α,γ₀,p,l)
     else
         cis((2p+abs(l))*angle(α))*core_LG(x,y,α,γ₀,p,l)
     end
