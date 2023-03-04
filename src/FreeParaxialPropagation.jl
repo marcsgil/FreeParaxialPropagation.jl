@@ -1,12 +1,16 @@
 module FreeParaxialPropagation
 
-using ClassicalOrthogonalPolynomials:laguerrel,hermiteh
 using FFTW, CUDA, CUDA.CUFFT
+CUDA.allowscalar(false)
 using Images
 using ThreadsX
+using SpecialFunctions
+
+include("orthogonal_polynomials.jl")
+export laguerre_coefficients,laguerre
 
 include("initial_profiles.jl")
-export LG,HG,diag_HG
+export lg#,HG,diag_HG
 
 include("vizualization.jl")
 export vizualize
