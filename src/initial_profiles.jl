@@ -1,3 +1,5 @@
+parallel_map(f,x...) = first(x) isa CuArray ? map(f,x...) : ThreadsX.map(f,x...)
+
 """
     binomial(x::Number,y::Number)
 
@@ -15,13 +17,17 @@ function build_grid(use_gpu,xs...)
 end
 
 
+function laguerre_coefficients_array(n::Integer,α=0)
+    [(-1)^i*binomial(n+α,n-i)/factorial(i) for i in 0:n]
+end
+
 """
     laguerre_coefficients(n::Integer,α=0)
 
 Compute the coefficients of the nth generalized Laguerre Polynomial.
 """
-function laguerre_coefficients(n::Integer,α=0)
-    [(-1)^i*binomial(n+α,n-i)/factorial(i) for i in 0:n]
+function laguerre_coefficients(n,α=0)
+    ntuple(i->-(-1)^i*binomial(n+α,n-i+1)/factorial(i-1),n)
 end
 
 normalization_lg(;p,l,γ₀=1) = 1/(γ₀*√( oftype(float(γ₀),π)*prod(p+1:p+abs(l))))
@@ -40,22 +46,6 @@ function _lg(grid,dims::Val{2},z,p,l,γ₀,k,normalize)
     k = convert(T,k)
 
     coefs = laguerre_coefficients(p,convert(T,abs(l)))
-
-    α = 1/(1+im*z/(k*γ₀^2))
-    prefactor = normalize ? normalization_lg(p=p,l=l,γ₀=γ₀) * cis((2p+abs(l))*angle(α)) : cis((2p+abs(l))*angle(α))
-
-    map(r->prefactor*core_lg(r...,α,γ₀,l,coefs), grid)
-end
-
-function _lg(grid::CuArray,dims::Val{2},z,p,l,γ₀,k,normalize)
-    T = eltype(eltype(grid))
-
-    @assert T <: AbstractFloat
-
-    γ₀ = convert(T,γ₀)
-    k = convert(T,k)
-
-    coefs = laguerre_coefficients(p,convert(T,abs(l))) |> CuArray
 
     α = 1/(1+im*z/(k*γ₀^2))
     prefactor = normalize ? normalization_lg(p=p,l=l,γ₀=γ₀) * cis((2p+abs(l))*angle(α)) : cis((2p+abs(l))*angle(α))
@@ -85,26 +75,7 @@ function _lg(grid,dims::Val{3},p,l,γ₀,k,normalize)
         prefactor*core_lg(x,y,α,γ₀,l,coefs)
     end
 
-    ThreadsX.map(r->f(r...), grid)
-end
-
-function _lg(grid::CuArray,dims::Val{3},p,l,γ₀,k,normalize)
-    T = eltype(eltype(grid))
-
-    @assert T <: AbstractFloat
-
-    γ₀ = convert(T,γ₀)
-    k = convert(T,k)
-
-    coefs = laguerre_coefficients(p,convert(T,abs(l))) |> CuArray
-
-    function f(x,y,z)
-        α = 1/(1+im*z/(k*γ₀^2))
-        prefactor = normalize ? normalization_lg(p=p,l=l,γ₀=γ₀) * cis((2p+abs(l))*angle(α)) : cis((2p+abs(l))*angle(α))
-        prefactor*core_lg(x,y,α,γ₀,l,coefs)
-    end
-
-    map(r->f(r...), grid)
+    parallel_map(r->f(r...), grid)
 end
 
 function lg(xs::AbstractArray,ys::AbstractArray,zs::AbstractArray;p::Integer=0,l::Integer=0,γ₀::Real=1,k::Real=1,normalize=true,use_gpu=false)
