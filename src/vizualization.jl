@@ -1,5 +1,4 @@
 normalize(ψ::AbstractArray{T,2}) where T  = ψ/maximum(abs.(ψ))
-normalize(ψ::AbstractArray{T,2}) where T <: Real = ψ/maximum(ψ)
 
 function normalize(ψ::AbstractArray{T,3};normalize_by_first=false) where T
     result = similar(ψ)
@@ -45,6 +44,6 @@ function vizualize(ψ::AbstractArray{T,4}; colormap=:hot,ratio=1,normalize_by_fi
     vcat(vizualize.( eachslice(ψ,dims=4),colormap=colormap,ratio=ratio,normalize_by_first=normalize_by_first )...)
 end
 
-function make_animation(ψs::AbstractArray{T,3}; colormap=:hot,ratio=1,fps=16) where T 
-    ImageShow.gif([convert2image(ψ,colormap=colormap,ratio=ratio) for ψ in eachslice(ψs,dims=3)],fps=fps)
+function make_animation(ψs::AbstractArray{T,3}; colormap=:hot,ratio=1,fps=16,normalize_by_first=normalize_by_first) where T 
+    ImageShow.gif([convert2image(normalize(ψ,normalize_by_first=normalize_by_first),colormap=colormap,ratio=ratio) for ψ in eachslice(ψs,dims=3)],fps=fps)
 end

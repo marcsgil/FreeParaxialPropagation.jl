@@ -10,7 +10,7 @@ using ThreadsX
 using SpecialFunctions
 
 include("initial_profiles.jl")
-export build_grid,laguerre_coefficients,lg#,HG,diag_HG
+export build_grid,laguerre_coefficients,lg,hermite_coefficients#,HG,diag_HG
 
 include("vizualization.jl")
 export vizualize,make_animation

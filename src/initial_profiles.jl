@@ -16,18 +16,13 @@ function build_grid(use_gpu,xs...)
     grid
 end
 
-
-function laguerre_coefficients_array(n::Integer,α=0)
-    [(-1)^i*binomial(n+α,n-i)/factorial(i) for i in 0:n]
-end
-
 """
     laguerre_coefficients(n::Integer,α=0)
 
 Compute the coefficients of the nth generalized Laguerre Polynomial.
 """
 function laguerre_coefficients(n,α=0)
-    ntuple(i->-(-1)^i*binomial(n+α,n-i+1)/factorial(i-1),n)
+    ntuple(i->-(-1)^i*binomial(n+α,n-i+1)/factorial(i-1),n+1)
 end
 
 normalization_lg(;p,l,γ₀=1) = 1/(γ₀*√( oftype(float(γ₀),π)*prod(p+1:p+abs(l))))
@@ -82,4 +77,13 @@ function lg(xs::AbstractArray,ys::AbstractArray,zs::AbstractArray;p::Integer=0,l
     grid = build_grid(use_gpu,xs,ys,zs)
 
     _lg(grid,Val(3),p,l,γ₀,k,normalize)
+end
+##
+
+function hermite_coefficients(n)
+    if iseven(n)
+        ntuple(l -> - factorial(n) * (-1) ^ (n ÷ 2 - l) / ( factorial(2l-2) * factorial( n÷2 - l + 1 ) ) |> Integer, n÷2+1)
+    else
+        ntuple(l -> - factorial(n) * (-1) ^ (n ÷ 2 - l) / ( factorial(2l-1) * factorial( n÷2 - l + 1 ) ) |> Integer, n÷2+1)
+    end
 end
