@@ -25,11 +25,11 @@ function normalize(ψ::AbstractArray{T,3};normalize_by_first=false) where T <: R
 end
 
 function convert2image(ψ::AbstractArray{T,N};colormap=:hot,ratio=1) where {T,N}
-    imresize(map( pixel -> get(colorschemes[colormap], pixel), abs2.(ψ) ),ratio=ratio)
+    imresize(map( pixel -> get(colorschemes[colormap], pixel), Array(abs2.(ψ)) ),ratio=ratio)
 end
 
 function convert2image(ψ::AbstractArray{T,N};colormap=:hot,ratio=1) where {T <: Real ,N }
-    imresize(map( pixel -> get(colorschemes[colormap], pixel), ψ ),ratio=ratio)
+    imresize(map( pixel -> get(colorschemes[colormap], pixel), Array(ψ) ),ratio=ratio)
 end
 
 function vizualize(ψ::AbstractArray{T,2}; colormap=:hot,ratio=1) where T
@@ -44,6 +44,6 @@ function vizualize(ψ::AbstractArray{T,4}; colormap=:hot,ratio=1,normalize_by_fi
     vcat(vizualize.( eachslice(ψ,dims=4),colormap=colormap,ratio=ratio,normalize_by_first=normalize_by_first )...)
 end
 
-function make_animation(ψs::AbstractArray{T,3}; colormap=:hot,ratio=1,fps=16,normalize_by_first=normalize_by_first) where T 
-    ImageShow.gif([convert2image(normalize(ψ,normalize_by_first=normalize_by_first),colormap=colormap,ratio=ratio) for ψ in eachslice(ψs,dims=3)],fps=fps)
+function animate(ψs::AbstractArray{T,3}; colormap=:hot,ratio=1,fps=16) where T 
+    ImageShow.gif([convert2image(normalize(Array(ψ)),colormap=colormap,ratio=ratio) for ψ in eachslice(ψs,dims=3)],fps=fps)
 end

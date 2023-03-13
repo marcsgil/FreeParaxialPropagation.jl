@@ -1,20 +1,9 @@
-parallel_map(f,x...) = first(x) isa CuArray ? map(f,x...) : ThreadsX.map(f,x...)
-
 """
     binomial(x::Number,y::Number)
 
 Compute the binomial coefficient for noninteger `x` and `y`.
 """
 Base.binomial(x::Number, y::Number) = inv((x+1) * beta(x-y+1, y+1))
-
-function build_grid(use_gpu,xs...)
-    if use_gpu
-        grid = Iterators.product(ntuple(i->Float32.(xs[i]),length(xs))...) |> collect |> CuArray
-    else
-        grid = Iterators.product(xs...)
-    end
-    grid
-end
 
 """
     laguerre_coefficients(n::Integer,α=0)
@@ -25,60 +14,84 @@ function laguerre_coefficients(n,α=0)
     ntuple(i->-(-1)^i*binomial(n+α,n-i+1)/factorial(i-1),n+1)
 end
 
+"""
+    normalization_lg(;p,l,γ₀=1)
+
+Compute the normalization constant for the Laguerre-Gaussian modes.
+"""
 normalization_lg(;p,l,γ₀=1) = 1/(γ₀*√( oftype(float(γ₀),π)*prod(p+1:p+abs(l))))
+
 
 function core_lg(x,y,α,γ₀,l,coefs)
     r2 = (x^2 + y^2)/γ₀^2
     α*exp(-α*r2/2)*(abs(α)*(x+im*sign(l)*y)/γ₀)^abs(l)*evalpoly(abs2(α)*r2,coefs)
 end
 
-function _lg(grid,dims::Val{2},z,p,l,γ₀,k,normalize)
-    T = eltype(eltype(grid))
+"""
+    lg(xs::AbstractVector{T},ys::AbstractVector{T},z::Real=0;
+        p::Integer=0,l::Integer=0,w0::Real=1,k::Real=1) where T<: AbstractFloat
 
-    @assert T <: AbstractFloat
+Compute the Laguerre-Gaussian mode over a cartesian grid defined by `xs` and `ys`. One may give a distance `z` away from the focus.
 
-    γ₀ = convert(T,γ₀)
+The optional keyword arguments are:
+
+`p`: radial index
+
+`l`: topological charge
+
+`w0`: beam's waist
+
+`k`: wavenumber
+"""
+function lg(xs::AbstractVector{T},ys::AbstractVector{T},z::Real=0;
+    p::Integer=0,l::Integer=0,w0::Real=1,k::Real=1) where T<: AbstractFloat
+
+    @assert p ≥ 0
+
+    γ₀ = convert(T,w0/√2)
     k = convert(T,k)
 
     coefs = laguerre_coefficients(p,convert(T,abs(l)))
 
     α = 1/(1+im*z/(k*γ₀^2))
-    prefactor = normalize ? normalization_lg(p=p,l=l,γ₀=γ₀) * cis((2p+abs(l))*angle(α)) : cis((2p+abs(l))*angle(α))
+    prefactor = normalization_lg(p=p,l=l,γ₀=γ₀) * cis((2p+abs(l))*angle(α))
 
-    map(r->prefactor*core_lg(r...,α,γ₀,l,coefs), grid)
+    ThreadsX.map(r->prefactor*core_lg(r...,α,γ₀,l,coefs), Iterators.product(xs,ys))
 end
 
-function lg(xs::AbstractArray,ys::AbstractArray,z::Number=0;p::Integer=0,l::Integer=0,γ₀::Real=1,k::Real=1,normalize=true,use_gpu=false)
-    grid = build_grid(use_gpu,xs,ys)
+"""
+    lg(xs::AbstractVector{T},ys::AbstractVector{T},zs::AbstractVector{T};
+        p::Integer=0,l::Integer=0,w0::Real=1,k::Real=1) where T<: AbstractFloat
 
-    _lg(grid,Val(2),z,p,l,γ₀,k,normalize)
-end
+Compute the Laguerre-Gaussian mode over a cartesian grid defined by `xs`, `ys` and `zs`.
 
-function _lg(grid,dims::Val{3},p,l,γ₀,k,normalize)
-    T = eltype(eltype(grid))
+The optional keyword arguments are:
 
-    @assert T <: AbstractFloat
+`p`: radial index
 
-    γ₀ = convert(T,γ₀)
+`l`: topological charge
+
+`w0`: beam's waist
+
+`k`: wavenumber
+"""
+function lg(xs::AbstractVector{T},ys::AbstractVector{T},zs::AbstractVector{T};
+    p::Integer=0,l::Integer=0,w0::Real=1,k::Real=1) where T<: AbstractFloat
+
+    @assert p ≥ 0
+
+    γ₀ = convert(T,w0/√2)
     k = convert(T,k)
 
     coefs = laguerre_coefficients(p,convert(T,abs(l)))
 
-    function f(x,y,z)
-        α = 1/(1+im*z/(k*γ₀^2))
-        prefactor = normalize ? normalization_lg(p=p,l=l,γ₀=γ₀) * cis((2p+abs(l))*angle(α)) : cis((2p+abs(l))*angle(α))
-        prefactor*core_lg(x,y,α,γ₀,l,coefs)
+    function f(x,y,α)
+        normalization_lg(p=p,l=l,γ₀=γ₀) * cis((2p+abs(l))*angle(α)) * core_lg(x,y,α,γ₀,l,coefs)
     end
 
-    parallel_map(r->f(r...), grid)
+    ThreadsX.map(z -> map( rs -> f(rs...,inv(1+im*z/(k*γ₀^2))), Iterators.product(xs,ys) ), zs) |> stack
 end
 
-function lg(xs::AbstractArray,ys::AbstractArray,zs::AbstractArray;p::Integer=0,l::Integer=0,γ₀::Real=1,k::Real=1,normalize=true,use_gpu=false)
-    grid = build_grid(use_gpu,xs,ys,zs)
-
-    _lg(grid,Val(3),p,l,γ₀,k,normalize)
-end
-##
 
 function hermite_coefficients(n)
     if iseven(n)
@@ -86,4 +99,162 @@ function hermite_coefficients(n)
     else
         ntuple(l -> - factorial(n) * (-1) ^ (n ÷ 2 - l) / ( factorial(2l-1) * factorial( n÷2 - l + 1 ) ) |> Integer, n÷2+1)
     end
+end
+
+"""
+    hermite(x,n,coefs)
+
+Evaluate the `n` th Hermite polynomial at `x`, given the coefficients `coefs`.
+"""
+hermite(x,n,coefs) = iseven(n) ? evalpoly(4x^2,coefs) : 2x*evalpoly(4x^2,coefs)
+
+"""
+    normalization_hg(;m,n,γ₀=1)
+
+Compute the normalization constant for the Laguerre-Gaussian modes.
+"""
+normalization_hg(;m,n,γ₀=1) = 1/(γ₀*√( oftype(float(γ₀),π)*2^(m+n)*factorial(n)*factorial(m)))
+
+function core_hg(x,y,α,γ₀,m,n,x_coefs,y_coefs,isdiagonal)
+    ξ = isdiagonal ? (x+y)/( √2 * γ₀) : x/γ₀
+    η = isdiagonal ? (x-y)/( √2 * γ₀) : y/γ₀
+    α*exp(-α*(ξ^2+η^2)/2)*hermite(abs(α)*ξ,m,x_coefs)*hermite(abs(α)*η,n,y_coefs)
+end
+
+"""
+    function hg(xs::AbstractVector{T},ys::AbstractVector{T},z::Real=0;
+        m::Integer=0,n::Integer=0,w0::Real=1,k::Real=1) where T<: AbstractFloat
+
+Compute the Hermite-Gaussian mode over a cartesian grid defined by `xs` and `ys`. One may give a distance `z` away from the focus.
+
+The optional keyword arguments are:
+
+`m`: horizontal index
+
+`n`: vertical index
+
+`w0`: beam's waist
+
+`k`: wavenumber
+"""
+function hg(xs::AbstractVector{T},ys::AbstractVector{T},z::Real=0;
+    m::Integer=0,n::Integer=0,w0::Real=1,k::Real=1) where T<: AbstractFloat
+
+    @assert m ≥ 0
+    @assert n ≥ 0
+
+    γ₀ = convert(T,w0/√2)
+    k = convert(T,k)
+
+    x_coefs = hermite_coefficients(m)
+    y_coefs = hermite_coefficients(n)
+
+    α = inv(1+im*z/(k*γ₀^2))
+    prefactor = normalization_hg(m=m,n=n,γ₀=γ₀) * cis((m+n)*angle(α))
+
+    ThreadsX.map(r->prefactor*core_hg(r...,α,γ₀,m,n,x_coefs,y_coefs,false), Iterators.product(xs,ys))
+end
+
+"""
+    hg(xs::AbstractVector{T},ys::AbstractVector{T},zs::AbstractVector{T};
+        m::Integer=0,n::Integer=0,w0::Real=1,k::Real=1) where T<: AbstractFloat
+
+Compute the Hermite-Gaussian mode over a cartesian grid defined by `xs`, `ys` and `zs`.
+
+The optional keyword arguments are:
+
+`m`: horizontal index
+
+`n`: vertical index
+
+`w0`: beam's waist
+
+`k`: wavenumber
+"""
+function hg(xs::AbstractVector{T},ys::AbstractVector{T},zs::AbstractVector{T};
+    m::Integer=0,n::Integer=0,w0::Real=1,k::Real=1) where T<: AbstractFloat
+
+    @assert m ≥ 0
+    @assert n ≥ 0
+
+    γ₀ = convert(T,w0/√2)
+    k = convert(T,k)
+
+    x_coefs = hermite_coefficients(m)
+    y_coefs = hermite_coefficients(n)
+
+    function f(x,y,α)
+        normalization_hg(m=m,n=n,γ₀=γ₀) * cis((m+n)*angle(α)) * core_hg(x,y,α,γ₀,m,n,x_coefs,y_coefs,false)
+    end
+
+    ThreadsX.map(z -> map( rs -> f(rs...,inv(1+im*z/(k*γ₀^2))), Iterators.product(xs,ys) ), zs) |> stack
+end
+
+"""
+    function diagonal_hg(xs::AbstractVector{T},ys::AbstractVector{T},z::Real=0;
+        m::Integer=0,n::Integer=0,w0::Real=1,k::Real=1) where T<: AbstractFloat
+
+Compute the diagonal Hermite-Gaussian mode over a cartesian grid defined by `xs` and `ys`. One may give a distance `z` away from the focus.
+
+The optional keyword arguments are:
+
+`m`: diagonal index
+
+`n`: antidiagonal index
+
+`w0`: beam's waist
+
+`k`: wavenumber
+"""
+function diagonal_hg(xs::AbstractVector{T},ys::AbstractVector{T},z::Real=0;
+    m::Integer=0,n::Integer=0,w0::Real=1,k::Real=1) where T<: AbstractFloat
+
+    @assert m ≥ 0
+    @assert n ≥ 0
+
+    γ₀ = convert(T,w0/√2)
+    k = convert(T,k)
+
+    x_coefs = hermite_coefficients(m)
+    y_coefs = hermite_coefficients(n)
+
+    α = inv(1+im*z/(k*γ₀^2))
+    prefactor = normalization_hg(m=m,n=n,γ₀=γ₀) * cis((m+n)*angle(α))
+
+    ThreadsX.map(r->prefactor*core_hg(r...,α,γ₀,m,n,x_coefs,y_coefs,true), Iterators.product(xs,ys))
+end
+
+"""
+    diagonal_hg(xs::AbstractVector{T},ys::AbstractVector{T},zs::AbstractVector{T};
+        m::Integer=0,n::Integer=0,w0::Real=1,k::Real=1) where T<: AbstractFloat
+
+Compute the Hermite-Gaussian mode over a cartesian grid defined by `xs`, `ys` and `zs`.
+
+The optional keyword arguments are:
+
+`m`: diagonal index
+
+`n`: antidiagonal index
+
+`w0`: beam's waist
+
+`k`: wavenumber
+"""
+function diagonal_hg(xs::AbstractVector{T},ys::AbstractVector{T},zs::AbstractVector{T};
+    m::Integer=0,n::Integer=0,w0::Real=1,k::Real=1) where T<: AbstractFloat
+
+    @assert m ≥ 0
+    @assert n ≥ 0
+
+    γ₀ = convert(T,w0/√2)
+    k = convert(T,k)
+
+    x_coefs = hermite_coefficients(m)
+    y_coefs = hermite_coefficients(n)
+
+    function f(x,y,α)
+        normalization_hg(m=m,n=n,γ₀=γ₀) * cis((m+n)*angle(α)) * core_hg(x,y,α,γ₀,m,n,x_coefs,y_coefs,true)
+    end
+
+    ThreadsX.map(z -> map( rs -> f(rs...,inv(1+im*z/(k*γ₀^2))), Iterators.product(xs,ys) ), zs) |> stack
 end

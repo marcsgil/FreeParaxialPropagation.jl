@@ -2,18 +2,17 @@ module FreeParaxialPropagation
 
 using Reexport
 
-using FFTW, CUDA, CUDA.CUFFT
-CUDA.allowscalar(false)
+using FFTW
 using Images, ImageShow
 @reexport using ColorSchemes
 using ThreadsX
 using SpecialFunctions
 
 include("initial_profiles.jl")
-export build_grid,laguerre_coefficients,lg,hermite_coefficients#,HG,diag_HG
+export lg,hg,diagonal_hg
 
 include("vizualization.jl")
-export vizualize,make_animation
+export vizualize,animate
 
 include("dft_utils.jl")
 
