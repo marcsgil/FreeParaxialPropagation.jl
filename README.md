@@ -21,5 +21,15 @@ directyly in a Julia session.
 The following code is a minimal working exemple for this package:
 
 ```julia
+using FreeParaxialPropagation #Loads the package
 
+rs = LinRange(-5,5,256) #Define a linear grid of points
+
+E0 = lg(rs,rs) #Calculates the fundamental Laguerre-Gaussian mode
+
+vizualize(E0) #Vizualizes the mode
+
+E = free_propagation(E0,rs,rs,1) #Propagates the mode through a distance of 1
+
+vizualize(E) #Vizualizes the evolved mode
 ```
