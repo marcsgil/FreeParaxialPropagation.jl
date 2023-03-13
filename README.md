@@ -16,6 +16,8 @@ using Pkg; Pkg.add("https://github.com/marcsgil/FreeParaxialPropagation.jl.git")
 
 directyly in a Julia session.
 
+**IMPORTANT:** This packages requires Julia 1.9, which is currently in beta. If you want to use it, I recomend istalling Julia thorugh [juliaup](https://github.com/JuliaLang/juliaup), where one can manage multiple versions.
+
 # Example
 
 The following code is a minimal working exemple for this package:
