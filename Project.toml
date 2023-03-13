@@ -3,11 +3,7 @@ uuid = "34432e42-2548-414e-b0ee-13347938ede4"
 authors = ["Marcos Gil <marcosgildeoliveira@gmail.com>"]
 version = "0.1.0"
 
-[weakdeps]
-CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 
-[extensions]
-GPU_propagation.jl = "CUDA"
 
 [deps]
 ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
